@@ -7,7 +7,7 @@
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<inttypes.h>
-#define count 50
+#define count 51
 #define n 1024
 #define string "/home/user/C/some"
 const uint_least32_t Crc32Table[256] = 
