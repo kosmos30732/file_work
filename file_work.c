@@ -7,8 +7,8 @@
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<inttypes.h>
-#define count 51
-#define n 1024
+#define max_legth_path 1024
+#define max_length_name 50
 #define string "/home/user/C/some"
 const uint_least32_t Crc32Table[256] = 
 {
@@ -87,42 +87,49 @@ uint_least32_t Crc32(FILE* fck_file)
 }
 struct pair_file_name
 {
-    char name[count];
+    char name[max_length_name];
     uint_least32_t summ;
 };
-void work_with_summ_of_file (int k, struct pair_file_name *dir_stat_file, const char* path_dir_file)
+void work_with_summ_of_file (int k, struct pair_file_name *dir_stat_file)
 {
-    int check[k];
+    int checker[k], something_there=0;
     for (int i = 0; i < k-1; i++)
     {
-        int nyzna_string=0;
-        int another=0;
+        if (checker[i]==1)
+        {
+            continue;
+        }        
+        int is_some_string=0;
         for (int j = i+1; j < k; j++)
         {
-            if (dir_stat_file[i].summ==dir_stat_file[j].summ && another==0 && check[i]!=1)
+            if (checker[j]==1)
             {
-                another=1;
-                nyzna_string=1;
-                check[j]=1;
-                printf("In derectrory: %s\n",path_dir_file);
-                printf("File %s same with file %s",dir_stat_file[i].name,dir_stat_file[j].name);
                 continue;
             }
-            if (dir_stat_file[i].summ==dir_stat_file[j].summ && another==1 && check[i]!=1)
+            if (dir_stat_file[i].summ==dir_stat_file[j].summ && is_some_string==0)
             {
-                check[j]=1;
-                printf(", %s",dir_stat_file[j].name);
+                checker[j]=1; is_some_string=1; something_there=1;
+                printf("The file %s, same with file %s",dir_stat_file[i].name, dir_stat_file[j].name);
+                continue;
             }
+            if (dir_stat_file[i].summ==dir_stat_file[j].summ && is_some_string==1)
+            {
+                checker[j]=1; 
+                printf(", same with file %s", dir_stat_file[j].name);
+                continue;
+            }            
         }
-        if (nyzna_string)
+        if (is_some_string==1)
         {
             puts("");
-        }
-        
+        }        
     }
-    return;
+    if (something_there==0)
+    {
+        printf("We can't find duplicate files. They don't exist.\n");
+    }       
 }
-void work_with_directory(const char* path_name)
+void work_with_directory(const char* path_name, struct pair_file_name *dir_stat_file, int *i)
 {
     DIR* main_dir= opendir(path_name);
     if (main_dir==0)
@@ -131,8 +138,6 @@ void work_with_directory(const char* path_name)
         return;
     }
     struct dirent* r_dir=readdir(main_dir);
-    struct pair_file_name dir_stat_file[count];
-    int i=0;
     while (r_dir!=0)
     {        
         if (strcmp(r_dir->d_name,".")==0 || strcmp(r_dir->d_name,"..")==0)
@@ -140,35 +145,55 @@ void work_with_directory(const char* path_name)
             r_dir=readdir(main_dir);
             continue;
         }
-        if (r_dir->d_type==4)
+        if (r_dir->d_type==DT_DIR)
         {
-            char path_directory[n];
+            char path_directory[max_legth_path];
             sprintf(path_directory, "%s%s%s", path_name, "/", r_dir->d_name);
-            work_with_directory(path_directory);
+            work_with_directory(path_directory, dir_stat_file, i);
             r_dir=readdir(main_dir);
             continue;
         }
-        char path_file_name[n];
+        char path_file_name[max_legth_path];
         sprintf(path_file_name, "%s%s%s", path_name, "/", r_dir->d_name);
         FILE* fck_file=fopen(path_file_name, "rb");
         if (fck_file==0)
         {
-            printf("Can't open file -(\n");
-            return;
+            printf("Can't open file -( ,%s\n", path_file_name);
+            continue;
         }
         uint_least32_t con_sum = Crc32(fck_file);
-        strcpy(dir_stat_file[i].name,r_dir->d_name);
-        dir_stat_file[i].summ=con_sum;
-        i++;
+        strcpy(dir_stat_file[*i].name,path_file_name);
+        dir_stat_file[(*i)].summ=con_sum;
+        *i=*i+1;
         fclose(fck_file);
         r_dir=readdir(main_dir);
     }
-    work_with_summ_of_file(i,dir_stat_file,path_name);
     closedir(main_dir);
     return;
 }
-int main()
+int main(int argc, char *argv[])
 {
-    work_with_directory(string);
+    if (argc<=1)
+    {
+        printf("You don't write the path to the directory\n");
+        printf("Call the program, and after space place path to the directory\n");
+        return 0;
+    }
+    if (argc>2)
+    {
+        printf("Too many arguments\n");
+        return 0;
+    }
+    DIR* check= opendir(argv[1]);
+    if (check==0)
+    {
+        printf("Something wrong with path name, check it. It's not be a file. Need corect path to directory.\n");
+        return 0;
+    }
+    closedir(check);
+    struct pair_file_name dir_stat_file[max_legth_path];
+    int i=0;
+    work_with_directory(argv[1], dir_stat_file,&i);
+    work_with_summ_of_file(i,dir_stat_file);    
     return 0;
 }
