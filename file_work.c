@@ -87,105 +87,124 @@ uint_least32_t Crc32(FILE* current_file)
     }
     return crc ^ 0xFFFFFFFF;
 }
-struct pair_file_name
+struct pair_namefile_and_hash
 {
-    char name[max_length_name];
-    uint_least32_t summ;
+    char namefile[max_length_name];
+    uint_least32_t hash;
 };
-void work_with_summ_of_file (int num_files, struct pair_file_name *dir_stat_file)
+void find_dublicate_files (int num_files, struct pair_namefile_and_hash *array_namefile_and_hash)
 {
-    int checker[num_files], something_there=0;
+    //array to check if the file already print
+    int checker[num_files];
+    //value to check if at least one duplicate is found
+    int something_there=0;
     for (int i = 0; i < num_files-1; i++)
     {
         if (checker[i]==1)
         {
             continue;
-        }        
+        }
+        //value to check if one or more equally duplicated files
         int is_first=0;
         for (int j = i+1; j < num_files; j++)
         {
-            if (dir_stat_file[i].summ==dir_stat_file[j].summ)
+            if (array_namefile_and_hash[i].hash==array_namefile_and_hash[j].hash)
             {
                 if(!is_first)
                 {
                     checker[j]=1; is_first=1;
                     something_there=1;
-                    printf("The file %s, same with file %s",dir_stat_file[i].name, dir_stat_file[j].name);
+                    printf("The file %s, same with file %s",array_namefile_and_hash[i].namefile, array_namefile_and_hash[j].namefile);
                 }
                 else
                 {
                     checker[j]=1; 
-                    printf(", same with file %s", dir_stat_file[j].name);
+                    printf(", same with file %s", array_namefile_and_hash[j].namefile);
                 }
             }      
         }
+        //make a line break if necessary
         if (is_first==1)
         {
             puts("");
         }        
     }
+    //check if at least one duplicate is found
     if (something_there==0)
     {
         printf("We can't find duplicate files. They don't exist.\n");
     }       
 }
-void work_with_directory(const char* path_name, struct pair_file_name *dir_stat_file, int *num_files)
+void get_hash_file (struct pair_namefile_and_hash *array_namefile_and_hash, int *num_files)
+{
+    FILE* fck_file=fopen(array_namefile_and_hash[*num_files].namefile, "rb");
+    if (fck_file==NULL)
+    {
+        perror("Error: ");
+        printf("The file is: %s\n", array_namefile_and_hash[*num_files].namefile);
+        return;
+    }
+    uint_least32_t con_sum = Crc32(fck_file);
+    array_namefile_and_hash[*num_files].hash=con_sum;
+    *num_files=*num_files+1;
+    fclose(fck_file);
+}
+void search_file_in_dir(const char* path_name, struct pair_namefile_and_hash *array_namefile_and_hash, int *num_files)
 {
     DIR* main_dir= opendir(path_name);
+    //check if directory didn't open correctly
     if (main_dir==NULL)
     {
         perror("Error with open directory: ");
         return;
     }
-    struct dirent* r_dir;
-    while ((r_dir=readdir(main_dir))!=NULL)
+    struct dirent* stat_read_element;
+    while ((stat_read_element=readdir(main_dir))!=NULL)
     {        
-        if (strcmp(r_dir->d_name,".")==0 || strcmp(r_dir->d_name,"..")==0)
+        if (strcmp(stat_read_element->d_name,".")==0 || strcmp(stat_read_element->d_name,"..")==0)
         {
             continue;
         }
-        if (r_dir->d_type==DT_DIR)
+        //check if another directory was found
+        if (stat_read_element->d_type==DT_DIR)
         {
             char path_directory[max_legth_path];
-            sprintf(path_directory, "%s%s%s", path_name, "/", r_dir->d_name);
-            work_with_directory(path_directory, dir_stat_file, num_files);
+            sprintf(path_directory, "%s%s%s", path_name, "/", stat_read_element->d_name);
+            search_file_in_dir(path_directory, array_namefile_and_hash, num_files);
             continue;
         }
-        sprintf(dir_stat_file[*num_files].name, "%s%s%s", path_name, "/", r_dir->d_name);
-        FILE* fck_file=fopen(dir_stat_file[*num_files].name, "rb");
-        if (fck_file==NULL)
-        {
-            perror("Error: ");
-            printf("The file is: %s\n", dir_stat_file[*num_files].name);
-            continue;
-        }
-        uint_least32_t con_sum = Crc32(fck_file);
-        dir_stat_file[(*num_files)].summ=con_sum;
-        *num_files=*num_files+1;
-        fclose(fck_file);
+        sprintf(array_namefile_and_hash[*num_files].namefile, "%s%s%s", path_name, "/", stat_read_element->d_name);
+        get_hash_file(array_namefile_and_hash, num_files);
     }
     closedir(main_dir);
     return;
 }
-int main(int argc, char *argv[])
+int check_arg_user (int argc, char *argv[])
 {
     if (argc!=2)
     {
         printf("Usage: %s <DIR>\n\tWhere <DIR> is a path to directory to find duplicates\n", argv[0]);
         return 1;
     }
-    
-    DIR* check= opendir(argv[1]);
-    if (check==NULL)
+    DIR* temp_dir= opendir(argv[1]);
+    if (temp_dir==NULL)
     {
         perror("Error: ");
         printf("Check the path to directory.\n");
-        return 2;
+        return 1;
     }
-    closedir(check);
-    struct pair_file_name dir_stat_file[max_legth_path]={0};
+    closedir(temp_dir);
+    return 0;
+}
+int main(int argc, char *argv[])
+{
+    if (check_arg_user(argc, argv))
+    {
+        return 1;
+    }    
+    struct pair_namefile_and_hash array_namefile_and_hash[max_legth_path]={0};
     int num_files=0;
-    work_with_directory(argv[1], dir_stat_file,&num_files);
-    work_with_summ_of_file(num_files,dir_stat_file);    
+    search_file_in_dir(argv[1],array_namefile_and_hash,&num_files);
+    find_dublicate_files(num_files,array_namefile_and_hash);    
     return 0;
 }
