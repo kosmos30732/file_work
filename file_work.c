@@ -135,19 +135,19 @@ void find_dublicate_files (int num_files, struct pair_namefile_and_hash *array_n
         printf("We can't find duplicate files. They don't exist.\n");
     }       
 }
-void get_hash_file (struct pair_namefile_and_hash *array_namefile_and_hash, int *num_files)
+int get_hash_file (struct pair_namefile_and_hash *namefile_and_hash)
 {
-    FILE* fck_file=fopen(array_namefile_and_hash[*num_files].namefile, "rb");
-    if (fck_file==NULL)
+    FILE* file=fopen(namefile_and_hash->namefile, "rb");
+    if (file==NULL)
     {
-        perror("Error: ");
-        printf("The file is: %s\n", array_namefile_and_hash[*num_files].namefile);
-        return;
+        fprintf(stderr, "Failed to open file %s",namefile_and_hash->namefile);
+        perror("");
+        return 1;
     }
-    uint_least32_t con_sum = Crc32(fck_file);
-    array_namefile_and_hash[*num_files].hash=con_sum;
-    *num_files=*num_files+1;
-    fclose(fck_file);
+    uint_least32_t con_sum = Crc32(file);
+    namefile_and_hash->hash=con_sum;
+    fclose(file);
+    return 0;
 }
 void search_file_in_dir(const char* path_name, struct pair_namefile_and_hash *array_namefile_and_hash, int *num_files)
 {
@@ -174,7 +174,10 @@ void search_file_in_dir(const char* path_name, struct pair_namefile_and_hash *ar
             continue;
         }
         sprintf(array_namefile_and_hash[*num_files].namefile, "%s%s%s", path_name, "/", stat_read_element->d_name);
-        get_hash_file(array_namefile_and_hash, num_files);
+        if (!get_hash_file(&array_namefile_and_hash[*num_files]))
+        {
+            *num_files=*num_files+1;
+        }        
     }
     closedir(main_dir);
     return;
@@ -189,8 +192,8 @@ int check_arg_user (int argc, char *argv[])
     DIR* temp_dir= opendir(argv[1]);
     if (temp_dir==NULL)
     {
-        perror("Error: ");
-        printf("Check the path to directory.\n");
+        fprintf(stderr, "Check the path to directory. ");
+        perror("");
         return 1;
     }
     closedir(temp_dir);
